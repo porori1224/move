@@ -56,7 +56,8 @@ GPS 기반 위치 수집, 실시간 데이터 처리, 지도 연동 기술을 �
 ![Notion](https://img.shields.io/badge/Notion-000000?style=for-the-badge&logo=notion&logoColor=white)
 
 
-
+</br>
+</br>
 ## 👥 팀 구성원
 
 | 역할 | 이름 | 소속 | 전공 | 담당 업무 |
