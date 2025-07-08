@@ -7,6 +7,14 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+package-lock.json
+package.json
+index.html
+eslint.config.js
+postcss.config.js
+tailwind.config.js
+vite.config.js
+
 node_modules
 dist
 dist-ssr
