@@ -9,7 +9,6 @@ lerna-debug.log*
 
 package-lock.json
 package.json
-index.html
 eslint.config.js
 postcss.config.js
 tailwind.config.js
