@@ -13,7 +13,7 @@ const MapContainer = ({ busData }) => {
 
         map.current = new mapboxgl.Map({
             container: mapContainer.current,
-            style: 'mapbox://styles/mapbox/navigation-day-v1',
+            style: 'mapbox://styles/mapbox/streets-v11',
             center: [126.930593, 35.140876], // 조선대학교 본관 위치 설정
             zoom: 16,
         });
