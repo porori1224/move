@@ -1,48 +1,73 @@
 import React, { useEffect, useRef } from "react";
-import mapboxgl from "mapbox-gl";
-import 'mapbox-gl/dist/mapbox-gl.css';
 
-mapboxgl.accessToken = 'pk.eyJ1IjoibWluc2VvMTIyNCIsImEiOiJjbWJzNmNpMzUwaDRxMmtxMndvb21iNmttIn0.sWARvE-o7UsazaSfeoEGmg';
 
 const MapContainer = ({ busData }) => {
     const mapContainer = useRef(null);
     const map = useRef(null);
 
-    useEffect (() => {
-        if (map.current) return;
+    useEffect(() => {
+      const scriptId = "kakao-map-sdk";
 
-        map.current = new mapboxgl.Map({
-            container: mapContainer.current,
-            style: 'mapbox://styles/mapbox/streets-v11',
-            center: [126.930593, 35.140876], // 조선대학교 본관 위치 설정
-            zoom: 16,
-        });
-        map.current.on('load', () => {
-          const layers = map.current.getStyle().layers;
-          for (const layer of layers) {
-            if (layer.type === 'symbol' && layer.layout?.['text-field']) {
-              map.current.setLayoutProperty(layer.id, 'text-field', [
-                'coalesce',
-                ['get', 'name_ko'],
-                ['get', 'name']
-              ]);
-            }
-          }
-        });
+      const existingScript = document.getElementById(scriptId);
+      if (existingScript) {
+        console.log("📌 SDK already loaded, proceeding to init");
+        if (window.kakao && window.kakao.maps) {
+          initializeMap();
+        } else {
+          existingScript.onload = initializeMap;
+        }
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.id = scriptId;
+      script.src = "https://dapi.kakao.com/v2/maps/sdk.js?appkey=7edbe84100355d940cf66090dbd7ea05&autoload=false";
+      script.async = true;
+      script.onerror = () => {
+        console.error("❌ Failed to load Kakao Maps script");
+      };
+      script.onload = () => {
+        console.log("✅ Kakao Maps script loaded");
+        window.kakao.maps.load(initializeMap);
+      };
+      document.head.appendChild(script);
+
+      function initializeMap() {
+        console.log("✅ Initializing Kakao Map");
+        const container = mapContainer.current;
+        if (!container) {
+          console.error("❌ Map container is null");
+          return;
+        }
+        const options = {
+          center: new window.kakao.maps.LatLng(35.140876, 126.930593),
+          level: 3,
+        };
+        map.current = new window.kakao.maps.Map(container, options);
+        console.log("✅ Kakao map initialized:", map.current);
+      }
     }, []);
 
+
     useEffect(() => {
-        if (!map.current || !busData) return;
+      if (!map.current || !busData) return;
 
-        busData.forEach(({ id, lng, lat, name }) => {
-            const el = document.createElement('div');
-            el.className = 'marker';
-
-            new mapboxgl.Marker(el)
-                .setLngLat([lng, lat])
-                .setPopup(new mapboxgl.Popup().setHTML(`<strong>${name}</strong>`))
-                .addTo(map.current);
+      busData.forEach(({ id, lng, lat, name }) => {
+        const markerPosition = new window.kakao.maps.LatLng(lat, lng);
+        const marker = new window.kakao.maps.Marker({
+          position: markerPosition,
+          map: map.current,
         });
+        const infowindow = new window.kakao.maps.InfoWindow({
+          content: `<div style="padding:5px;">${name}</div>`,
+        });
+        window.kakao.maps.event.addListener(marker, 'mouseover', () => {
+          infowindow.open(map.current, marker);
+        });
+        window.kakao.maps.event.addListener(marker, 'mouseout', () => {
+          infowindow.close();
+        });
+      });
     }, [busData]);
 
     return (
@@ -55,7 +80,7 @@ const MapContainer = ({ busData }) => {
             width: '100vw',
             height: '100vh',
           }}
-        />
+        ></div>
   );
 };
 
