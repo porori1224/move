@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from "react";
+import { mockBusData } from "../../features/bus/mockBusData";
 
-
-const MapContainer = ({ busData }) => {
+const MapContainer = ({ busData = mockBusData }) => {
     const mapContainer = useRef(null);
     const map = useRef(null);
 
@@ -47,7 +47,6 @@ const MapContainer = ({ busData }) => {
         console.log("✅ Kakao map initialized:", map.current);
       }
     }, []);
-
 
     useEffect(() => {
       if (!map.current || !busData) return;
