@@ -7,7 +7,14 @@ export default function useBusWebSocket(map) {
   const busMarkersRef = useRef({});
 
   useEffect(() => {
-    if (!map?.current) return;
+    console.log("🛠 useBusWebSocket effect triggered");
+
+    if (!map?.current) {
+      console.warn("⚠️ map.current is null or undefined. WebSocket setup skipped.");
+      return;
+    }
+
+    console.log("🧭 map.current is available, proceeding with WebSocket setup");
 
     const socket = new SockJS("http://gwon.my/ws");
     const client = new Client({
@@ -16,52 +23,56 @@ export default function useBusWebSocket(map) {
         console.log("✅ WebSocket 연결됨");
 
         client.subscribe("/topic/data", (message) => {
-          const data = JSON.parse(message.body);
-          console.log("📥 실시간 수신:", data);
+          try {
+            const data = JSON.parse(message.body);
+            console.log("📥 실시간 수신:", data);
 
-          const { id, lat, lng, name } = data;
-          const position = new window.kakao.maps.LatLng(lat, lng);
+            const { id, lat, lng, name } = data;
+            const position = new window.kakao.maps.LatLng(lat, lng);
 
-          if (busMarkersRef.current[id]) {
-            busMarkersRef.current[id].setPosition(position);
+            if (busMarkersRef.current[id]) {
+              busMarkersRef.current[id].setPosition(position);
 
-            const infowindow = new window.kakao.maps.InfoWindow({
-              content: `<div style="padding:5px;">${name}</div>`,
-            });
-            infowindow.open(map.current, busMarkersRef.current[id]);
-            setTimeout(() => {
-              infowindow.close();
-            }, 2000);
-          } else {
-            const markerImage = new window.kakao.maps.MarkerImage(
-              "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png",
-              new window.kakao.maps.Size(24, 35)
-            );
+              const infowindow = new window.kakao.maps.InfoWindow({
+                content: `<div style="padding:5px;">${name}</div>`,
+              });
+              infowindow.open(map.current, busMarkersRef.current[id]);
+              setTimeout(() => {
+                infowindow.close();
+              }, 2000);
+            } else {
+              const markerImage = new window.kakao.maps.MarkerImage(
+                "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png",
+                new window.kakao.maps.Size(24, 35)
+              );
 
-            const marker = new window.kakao.maps.Marker({
-              position,
-              map: map.current,
-              title: name,
-              image: markerImage,
-            });
+              const marker = new window.kakao.maps.Marker({
+                position,
+                map: map.current,
+                title: name,
+                image: markerImage,
+              });
 
-            const infowindow = new window.kakao.maps.InfoWindow({
-              content: `<div style="padding:5px;">${name}</div>`,
-            });
+              const infowindow = new window.kakao.maps.InfoWindow({
+                content: `<div style="padding:5px;">${name}</div>`,
+              });
 
-            window.kakao.maps.event.addListener(marker, "mouseover", () => {
+              window.kakao.maps.event.addListener(marker, "mouseover", () => {
+                infowindow.open(map.current, marker);
+              });
+              window.kakao.maps.event.addListener(marker, "mouseout", () => {
+                infowindow.close();
+              });
+
               infowindow.open(map.current, marker);
-            });
-            window.kakao.maps.event.addListener(marker, "mouseout", () => {
-              infowindow.close();
-            });
+              setTimeout(() => {
+                infowindow.close();
+              }, 2000);
 
-            infowindow.open(map.current, marker);
-            setTimeout(() => {
-              infowindow.close();
-            }, 2000);
-
-            busMarkersRef.current[id] = marker;
+              busMarkersRef.current[id] = marker;
+            }
+          } catch (err) {
+            console.error("❌ 메시지 파싱 오류:", err);
           }
         });
       },
@@ -70,11 +81,13 @@ export default function useBusWebSocket(map) {
       },
     });
 
+    console.log("📡 Activating WebSocket client...");
     client.activate();
     stompClientRef.current = client;
 
     return () => {
       if (stompClientRef.current) {
+        console.log("🛑 Deactivating WebSocket client");
         stompClientRef.current.deactivate();
       }
     };

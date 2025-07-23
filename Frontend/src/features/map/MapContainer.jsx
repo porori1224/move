@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { mockBusData } from "../../features/bus/mockBusData";
 import SearchBox from "./components/SearchBox";
-import useBusWebSocket from "../../hooks/useBusWebSocket";
 import useBusRoute from "../../hooks/useBusRoute";
 import useCoordinateLogger from "../../hooks/useCorrdinateLogger";
 import { use } from "react";
@@ -12,12 +11,41 @@ const MapContainer = ({ busData = mockBusData }) => {
   const [searchResult, setSearchResult] = useState(null);
   const [mapReady, setMapReady] = useState(false);
 
-  useBusWebSocket(map);
   useCoordinateLogger(map);
+  useBusRoute(map);
+  // useBusWebSocket(map); 호출을 아래 useEffect로 이동
+
+  // WebSocket 연결을 설정하는 내부 함수 (기존 useBusWebSocket 역할)
+  function setupWebSocket() {
+    // useBusWebSocket에서 수행할 로직 예시
+    // 실제 hook 구현에 맞게 WebSocket 주소와 로직을 조정하세요.
+    if (!map.current) return;
+    // 기본 예시입니다. ws 인스턴스를 저장하거나 정리 작업이 필요할 수 있습니다.
+    const ws = new window.WebSocket("ws://localhost:8080/ws/bus");
+    ws.onopen = () => {
+      console.log("🚌 웹소켓 연결됨");
+      // 초기 메시지를 보낼 수 있습니다 (옵션)
+      // ws.send(JSON.stringify({ type: "subscribe", mapId: ... }));
+    };
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      // 수신된 버스 데이터를 처리하고 지도 마커를 업데이트합니다.
+      console.log("🚌 수신된 버스 데이터:", data);
+      // 마커를 업데이트하려면 여기에 로직을 추가할 수 있습니다.
+      // 메모리 누수에 주의해야 하며, 이전 마커는 필요 시 정리해야 합니다.
+    };
+    ws.onerror = (error) => {
+      console.error("❌ 웹소켓 오류:", error);
+    };
+    ws.onclose = () => {
+      console.log("🚌 웹소켓 연결 종료됨");
+    };
+    // 나중에 정리를 위해 ws를 ref에 저장할 수 있습니다 (옵션)
+  }
 
   useEffect(() => {
-    if (mapReady) {
-      useBusRoute(map);
+    if (mapReady && map.current) {
+      setupWebSocket();
     }
   }, [mapReady]);
 
