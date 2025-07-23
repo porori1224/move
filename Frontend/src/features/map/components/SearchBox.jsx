@@ -25,6 +25,9 @@ const SearchBox = ({ onSearch }) => {
                 onChange={e => setKeyword(e.target.value)}
                 placeholder="장소를 검색하세요."
                 style={{ padding: 4 }}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSearch();
+                }}
             />
             <button onClick={handleSearch} style={{ marginLeft: 4}} />
         </div>

@@ -1,11 +1,25 @@
 import React, { useEffect, useRef, useState } from "react";
 import { mockBusData } from "../../features/bus/mockBusData";
 import SearchBox from "./components/SearchBox";
+import useBusWebSocket from "../../hooks/useBusWebSocket";
+import useBusRoute from "../../hooks/useBusRoute";
+import useCoordinateLogger from "../../hooks/useCorrdinateLogger";
+import { use } from "react";
 
 const MapContainer = ({ busData = mockBusData }) => {
   const mapContainer = useRef(null);
   const map = useRef(null);
   const [searchResult, setSearchResult] = useState(null);
+  const [mapReady, setMapReady] = useState(false);
+
+  useBusWebSocket(map);
+  useCoordinateLogger(map);
+
+  useEffect(() => {
+    if (mapReady) {
+      useBusRoute(map);
+    }
+  }, [mapReady]);
 
   useEffect(() => {
     const scriptId = "kakao-map-sdk";
@@ -79,10 +93,21 @@ const MapContainer = ({ busData = mockBusData }) => {
 
           // 지도 중심을 사용자 위치로 이동
           map.current.setCenter(userLatLng);
+
+          // 지도 클릭 시 위도/경도 출력
+          window.kakao.maps.event.addListener(map.current, 'click', function (mouseEvent) {
+            const latlng = mouseEvent.latLng;
+            const lat = latlng.getLat();
+            const lng = latlng.getLng();
+            alert(`📍 위도: ${lat}\n경도: ${lng}`);
+            console.log(`🗺️ 클릭된 위치: 위도 ${lat}, 경도 ${lng}`);
+          });
+          setMapReady(true);
         },
         (error) => {
           alert("사용자 위치를 가져오는 데 실패했습니다. 위치 권한을 확인해주세요.");
           console.error("❌ 사용자 위치 가져오기 실패:", error);
+          setMapReady(true);
         }
       );
     }
