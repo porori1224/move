@@ -1,46 +1,56 @@
 import React, { useEffect, useRef, useState } from "react";
-import { mockBusData } from "../../features/bus/mockBusData";
 import SearchBox from "./components/SearchBox";
 import useBusRoute from "../../hooks/useBusRoute";
 import useCoordinateLogger from "../../hooks/useCorrdinateLogger";
-import { use } from "react";
+import SockJS from "sockjs-client";
+import { Stomp } from "@stomp/stompjs";
 
-const MapContainer = ({ busData = mockBusData }) => {
+const MapContainer = () => {
   const mapContainer = useRef(null);
   const map = useRef(null);
   const [searchResult, setSearchResult] = useState(null);
   const [mapReady, setMapReady] = useState(false);
+  const [busData, setBusData] = useState([]);
 
   useCoordinateLogger(map);
   useBusRoute(map);
-  // useBusWebSocket(map); 호출을 아래 useEffect로 이동
 
-  // WebSocket 연결을 설정하는 내부 함수 (기존 useBusWebSocket 역할)
   function setupWebSocket() {
-    // useBusWebSocket에서 수행할 로직 예시
-    // 실제 hook 구현에 맞게 WebSocket 주소와 로직을 조정하세요.
     if (!map.current) return;
-    // 기본 예시입니다. ws 인스턴스를 저장하거나 정리 작업이 필요할 수 있습니다.
-    const ws = new window.WebSocket("ws://localhost:8080/ws/bus");
-    ws.onopen = () => {
-      console.log("🚌 웹소켓 연결됨");
-      // 초기 메시지를 보낼 수 있습니다 (옵션)
-      // ws.send(JSON.stringify({ type: "subscribe", mapId: ... }));
+    console.log("📡 WebSocket 연결 시도");
+    const socket = new SockJS("http://221.142.148.73:8080/ws");
+    const client = Stomp.over(socket);
+    client.debug = (str) => console.log(`[STOMP DEBUG] ${str}`);
+    client.reconnectDelay = 5000;
+
+    client.onConnect = () => {
+      console.log("✅ WebSocket 연결됨");
+
+      client.subscribe("/topic/gps", (message) => {
+        const data = JSON.parse(message.body);
+        const parsedData = Array.isArray(data) ? data : [data];
+        const formattedData = parsedData.map((item, index) => {
+          const deviceIdMatch = item.deviceId || item.deviceID || item.device_id || `device-${index}`;
+          return {
+            id: deviceIdMatch,
+            lat: parseFloat(item.lat),
+            lng: parseFloat(item.lon || item.lng),
+            name: deviceIdMatch,
+          };
+        });
+        setBusData(formattedData);
+      });
     };
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      // 수신된 버스 데이터를 처리하고 지도 마커를 업데이트합니다.
-      console.log("🚌 수신된 버스 데이터:", data);
-      // 마커를 업데이트하려면 여기에 로직을 추가할 수 있습니다.
-      // 메모리 누수에 주의해야 하며, 이전 마커는 필요 시 정리해야 합니다.
+
+    client.onStompError = (frame) => {
+      console.error("❌ STOMP 프로토콜 오류:", frame);
     };
-    ws.onerror = (error) => {
-      console.error("❌ 웹소켓 오류:", error);
+
+    client.onWebSocketError = (error) => {
+      console.error("🌐 WebSocket 오류:", error);
     };
-    ws.onclose = () => {
-      console.log("🚌 웹소켓 연결 종료됨");
-    };
-    // 나중에 정리를 위해 ws를 ref에 저장할 수 있습니다 (옵션)
+
+    client.activate();
   }
 
   useEffect(() => {
@@ -54,7 +64,6 @@ const MapContainer = ({ busData = mockBusData }) => {
 
     const existingScript = document.getElementById(scriptId);
     if (existingScript) {
-      console.log("📌 SDK already loaded, proceeding to init");
       if (window.kakao && window.kakao.maps) {
         initializeMap();
       } else {
@@ -68,19 +77,17 @@ const MapContainer = ({ busData = mockBusData }) => {
     script.src = "https://dapi.kakao.com/v2/maps/sdk.js?appkey=7edbe84100355d940cf66090dbd7ea05&libraries=services&autoload=false";
     script.async = true;
     script.onerror = () => {
-      console.error("❌ Failed to load Kakao Maps script");
+      console.error("❌ 카카오 지도 스크립트 로드 실패");
     };
     script.onload = () => {
-      console.log("✅ Kakao Maps script loaded");
+      console.log("✅ 카카오 지도 스크립트 로드 완료");
       window.kakao.maps.load(initializeMap);
     };
     document.head.appendChild(script);
 
     function initializeMap() {
-      console.log("✅ Initializing Kakao Map");
       const container = mapContainer.current;
       if (!container) {
-        console.error("❌ Map container is null");
         return;
       }
       const options = {
@@ -88,7 +95,8 @@ const MapContainer = ({ busData = mockBusData }) => {
         level: 3,
       };
       map.current = new window.kakao.maps.Map(container, options);
-      console.log("✅ Kakao map initialized:", map.current);
+      console.log("✅ 카카오 지도 초기화 완료:", map.current);
+      setMapReady(true);
 
       if (searchResult) {
         const { lat, lng, name } = searchResult;
@@ -103,41 +111,52 @@ const MapContainer = ({ busData = mockBusData }) => {
         });
       }
 
-      // 사용자 위치 가져오기 및 마커
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          const userLatLng = new window.kakao.maps.LatLng(latitude, longitude);
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            const userLatLng = new window.kakao.maps.LatLng(latitude, longitude);
 
-          // 사용자 위치 마커
-          const userMarker = new window.kakao.maps.Marker({
-            position: userLatLng,
-            map: map.current,
-            image: new window.kakao.maps.MarkerImage(
-              'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png',
-              new window.kakao.maps.Size(24, 35)
-            ),
-          });
+            const userMarker = new window.kakao.maps.Marker({
+              position: userLatLng,
+              map: map.current,
+              image: new window.kakao.maps.MarkerImage(
+                "/markerStar.png",
+                new window.kakao.maps.Size(24, 35)
+              ),
+            });
 
-          // 지도 중심을 사용자 위치로 이동
-          map.current.setCenter(userLatLng);
+            map.current.setCenter(userLatLng);
 
-          // 지도 클릭 시 위도/경도 출력
-          window.kakao.maps.event.addListener(map.current, 'click', function (mouseEvent) {
-            const latlng = mouseEvent.latLng;
-            const lat = latlng.getLat();
-            const lng = latlng.getLng();
-            alert(`📍 위도: ${lat}\n경도: ${lng}`);
-            console.log(`🗺️ 클릭된 위치: 위도 ${lat}, 경도 ${lng}`);
-          });
-          setMapReady(true);
-        },
-        (error) => {
-          alert("사용자 위치를 가져오는 데 실패했습니다. 위치 권한을 확인해주세요.");
-          console.error("❌ 사용자 위치 가져오기 실패:", error);
-          setMapReady(true);
-        }
-      );
+            window.kakao.maps.event.addListener(map.current, 'click', function (mouseEvent) {
+              const latlng = mouseEvent.latLng;
+              const lat = latlng.getLat();
+              const lng = latlng.getLng();
+              alert(`📍 위도: ${lat}\n경도: ${lng}`);
+            });
+
+            setMapReady(true);
+          },
+          (error) => {
+            console.warn("⚠️ 위치 정보를 가져오지 못했습니다. 기본 위치로 설정합니다.");
+            const fallbackLatLng = new window.kakao.maps.LatLng(35.140876, 126.930593);
+            map.current.setCenter(fallbackLatLng);
+
+            new window.kakao.maps.Marker({
+              position: fallbackLatLng,
+              map: map.current,
+              title: "기본 위치",
+            });
+
+            setMapReady(true);
+          }
+        );
+      } else {
+        console.warn("⚠️ 이 브라우저는 위치 정보를 지원하지 않습니다.");
+        const fallbackLatLng = new window.kakao.maps.LatLng(35.140876, 126.930593);
+        map.current.setCenter(fallbackLatLng);
+        setMapReady(true);
+      }
     }
   }, []);
 
@@ -146,9 +165,16 @@ const MapContainer = ({ busData = mockBusData }) => {
 
     busData.forEach(({ id, lng, lat, name }) => {
       const markerPosition = new window.kakao.maps.LatLng(lat, lng);
+      const markerImage = new window.kakao.maps.MarkerImage(
+        "/busMarker.png",
+        new window.kakao.maps.Size(24, 35)
+      );
+
       const marker = new window.kakao.maps.Marker({
         position: markerPosition,
         map: map.current,
+        title: name,
+        image: markerImage,
       });
       const infowindow = new window.kakao.maps.InfoWindow({
         content: `<div style="padding:5px;">${name}</div>`,

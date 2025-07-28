@@ -1,11 +1,9 @@
 import React from "react";
 import MapContainer from "../../../features/map/MapContainer";
-import { mockBusData } from "../../../features/bus/mockBusData";
-
-const MapSection = () => {
+const MapSection = (props) => {
   return (
-    <div className="w-full h-screen">
-      <MapContainer busData={mockBusData} />
+    <div className="map-section-container w-full h-screen">
+      <MapContainer {...props} />
     </div>
   );
 };

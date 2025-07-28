@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Client } from "@stomp/stompjs";
+import { Stomp } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 
 export default function useBusWebSocket(map) {
@@ -7,32 +7,43 @@ export default function useBusWebSocket(map) {
   const busMarkersRef = useRef({});
 
   useEffect(() => {
-    console.log("🛠 useBusWebSocket effect triggered");
-
+    console.log("📡 useBusWebSocket hook 실행됨");
     if (!map?.current) {
-      console.warn("⚠️ map.current is null or undefined. WebSocket setup skipped.");
       return;
     }
 
-    console.log("🧭 map.current is available, proceeding with WebSocket setup");
+    // 환경에 따라 WebSocket 주소 자동 설정
+    // 개발: ws://localhost:8080/ws
+    // 배포: wss://gwon.my/ws
+    const WS_URL = "http://221.142.148.73:8080/ws";
+    const socket = new SockJS(WS_URL);
+    const client = Stomp.over(socket);
+    client.debug = (str) => {
+      console.log(`[STOMP DEBUG] ${str}`);
+    };
 
-    const socket = new SockJS("http://gwon.my/ws");
-    const client = new Client({
-      webSocketFactory: () => socket,
-      onConnect: () => {
-        console.log("✅ WebSocket 연결됨");
+    const onConnect = () => {
+      console.log("✅ WebSocket 연결됨");
 
-        client.subscribe("/topic/data", (message) => {
-          try {
-            const data = JSON.parse(message.body);
-            console.log("📥 실시간 수신:", data);
+      client.subscribe("/topic/gps", (message) => {
+        try {
+          const data = JSON.parse(message.body);
+          console.log("📥 실시간 수신:", data);
 
-            const { id, lat, lng, name } = data;
+          const parsed = Array.isArray(data) ? data : [data];
+
+          parsed.forEach((item) => {
+            const id = item.deviceId || item.deviceID || item.id || `unknown-${Math.random()}`;
+            const lat = parseFloat(item.lat);
+            const lng = parseFloat(item.lng || item.lon);
+            const name = item.name || id;
+
+            if (isNaN(lat) || isNaN(lng)) return;
+
             const position = new window.kakao.maps.LatLng(lat, lng);
 
             if (busMarkersRef.current[id]) {
               busMarkersRef.current[id].setPosition(position);
-
               const infowindow = new window.kakao.maps.InfoWindow({
                 content: `<div style="padding:5px;">${name}</div>`,
               });
@@ -42,7 +53,7 @@ export default function useBusWebSocket(map) {
               }, 2000);
             } else {
               const markerImage = new window.kakao.maps.MarkerImage(
-                "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png",
+                "/markerStar.png",
                 new window.kakao.maps.Size(24, 35)
               );
 
@@ -71,24 +82,28 @@ export default function useBusWebSocket(map) {
 
               busMarkersRef.current[id] = marker;
             }
-          } catch (err) {
-            console.error("❌ 메시지 파싱 오류:", err);
-          }
-        });
-      },
-      onStompError: (frame) => {
-        console.error("❌ STOMP 에러", frame);
-      },
-    });
+          });
+        } catch (err) {
+          console.error("❌ 메시지 파싱 오류:", err);
+        }
+      });
+    };
 
-    console.log("📡 Activating WebSocket client...");
+    const onError = (error) => {
+      console.error("❌ WebSocket 연결 실패:", error);
+    };
+
+    client.onConnect = onConnect;
+    client.onStompError = onError;
+    client.onWebSocketError = onError;
     client.activate();
     stompClientRef.current = client;
 
     return () => {
       if (stompClientRef.current) {
-        console.log("🛑 Deactivating WebSocket client");
-        stompClientRef.current.deactivate();
+        stompClientRef.current.disconnect(() => {
+          console.warn("🔌 WebSocket 연결 종료됨");
+        });
       }
     };
   }, [map]);
