@@ -11,7 +11,7 @@ const MapContainer = ({ busData, num }) => {
     const [data, setData] = useState([]);
 
     useEffect(() => {
-    // SockJS endpoint - TODO: 추후 도메인으로 변경 예정 env 추가
+    // SockJS endpoint - TODO: 추후 도메인으로 변경 예정 env 추가 
     const socket = new SockJS("http://221.142.148.73:8800/ws");
 
     // STOMP client
