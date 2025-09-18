@@ -1,12 +1,43 @@
 // Kakao 지도를 초기화/표시하고, 현재 위치(정확도 원 + 방향 오버레이)와
 // 외부에서 전달되는 버스 마커를 그리는 컴포넌트입니다.
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import styles from './KakaoMap.module.css';
+import SockJS from "sockjs-client";
+import { Client } from "@stomp/stompjs";
 
-
-const MapContainer = ({ busData }) => {
+const MapContainer = ({ busData, num }) => {
     const mapContainer = useRef(null);
     const map = useRef(null);
+    const [data, setData] = useState([]);
+
+    useEffect(() => {
+    // SockJS endpoint - TODO: 추후 도메인으로 변경 예정
+    const socket = new SockJS("http://221.142.148.73:8800/ws");
+
+    // STOMP client
+    const client = new Client({
+      webSocketFactory: () => socket,
+      reconnectDelay: 5000,
+    });
+
+    client.onConnect = () => {
+      console.log("✅ Connected to WebSocket server");
+
+      // 구독 - TODO: 토픽 변경 예정
+      client.subscribe(`/move/gps/operator/1`, (message) => {
+        const body = JSON.parse(message.body);
+        console.log("📡 Received data:", body); // 개발자 도구에 출력
+      });
+    };
+
+    client.onStompError = (frame) => {
+      console.error("❌ STOMP error:", frame);
+    };
+
+    client.activate();
+
+    return () => client.deactivate();
+  }, [num]);
 
     // SDK 로드 및 지도 초기화
     useEffect(() => {
