@@ -11,7 +11,7 @@ const MapContainer = ({ busData, num }) => {
     const [data, setData] = useState([]);
 
     useEffect(() => {
-    // SockJS endpoint - TODO: 추후 도메인으로 변경 예정
+    // SockJS endpoint - TODO: 추후 도메인으로 변경 예정 env 추가
     const socket = new SockJS("http://221.142.148.73:8800/ws");
 
     // STOMP client
@@ -23,7 +23,7 @@ const MapContainer = ({ busData, num }) => {
     client.onConnect = () => {
       console.log("✅ Connected to WebSocket server");
 
-      // 구독 - TODO: 토픽 변경 예정
+      // 구독 - TODO: 토픽 변경 예정 env 추가
       client.subscribe(`/move/gps/operator/1`, (message) => {
         const body = JSON.parse(message.body);
         console.log("📡 Received data:", body); // 개발자 도구에 출력
