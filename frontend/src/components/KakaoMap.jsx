@@ -25,44 +25,60 @@ const MapContainer = ({ busData, num }) => {
     const busOverlaysRef = useRef(new Map());
 
     useEffect(() => {
-    // SockJS endpoint - TODO: 추후 도메인으로 변경 예정 env 추가 
-    const socket = new SockJS("http://221.142.148.73:8800/ws");
-
-    // STOMP client
-    const client = new Client({
-      webSocketFactory: () => socket,
-      reconnectDelay: 5000,
-    });
-
-    client.onConnect = () => {
-      console.log("✅ Connected to WebSocket server");
-
-      // 구독 - TODO: 토픽 변경 예정 env 추가
-      client.subscribe(`/move/gps/operator/1`, (message) => {
-        try {
-          const body = JSON.parse(message.body);
-          console.log("📡 Received data:", body); // 개발자 도구에 출력
-          const list = Array.isArray(body) ? body : [body];
-          setData((prev) => {
-            const next = list.filter(Boolean);
-            if (next.length) return next;
-            if (prev?.length) return prev;
-            return [getDefaultBus()];
-          });
-        } catch (error) {
-          console.error('버스 데이터 파싱 실패', error);
+      const rawWsUrl = import.meta.env.VITE_WS_URL || '';
+      const wsEndpoint = (() => {
+        if (!rawWsUrl) return '';
+        if (typeof window === 'undefined') return rawWsUrl;
+        const isSecurePage = window.location?.protocol === 'https:';
+        if (isSecurePage && rawWsUrl.startsWith('http://')) {
+          return rawWsUrl.replace(/^http:/, 'https:');
         }
+        return rawWsUrl;
+      })();
+
+      if (!wsEndpoint) {
+        console.warn('SockJS endpoint가 설정되지 않았습니다. VITE_WS_URL을 확인하세요.');
+        return () => undefined;
+      }
+
+      // SockJS endpoint - TODO: 추후 도메인으로 변경 예정 env 추가 
+      const socket = new SockJS(wsEndpoint);
+
+      // STOMP client
+      const client = new Client({
+        webSocketFactory: () => socket,
+        reconnectDelay: 5000,
       });
-    };
 
-    client.onStompError = (frame) => {
-      console.error("❌ STOMP error:", frame);
-    };
+      client.onConnect = () => {
+        console.log("✅ Connected to WebSocket server");
 
-    client.activate();
+        // 구독 - TODO: 토픽 변경 예정 env 추가
+        client.subscribe(`/move/gps/operator/1`, (message) => {
+          try {
+            const body = JSON.parse(message.body);
+            console.log("📡 Received data:", body); // 개발자 도구에 출력
+            const list = Array.isArray(body) ? body : [body];
+            setData((prev) => {
+              const next = list.filter(Boolean);
+              if (next.length) return next;
+              if (prev?.length) return prev;
+              return [getDefaultBus()];
+            });
+          } catch (error) {
+            console.error('버스 데이터 파싱 실패', error);
+          }
+        });
+      };
 
-    return () => client.deactivate();
-  }, [num]);
+      client.onStompError = (frame) => {
+        console.error("❌ STOMP error:", frame);
+      };
+
+      client.activate();
+
+      return () => client.deactivate();
+    }, [num]);
 
     // SDK 로드 및 지도 초기화
     useEffect(() => {
