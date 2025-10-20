@@ -46,6 +46,21 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
     const followBusIdRef = useRef(null);
     const lastPanAtRef = useRef(0);
     const latestBusMapRef = useRef(new Map());
+    const manualOverrideRef = useRef({ until: 0, reason: null });
+    const prevBusFilterRef = useRef(selectedBusFilter);
+    const prevOrgRef = useRef(selectedOrg);
+    const registerManualOverride = useCallback((reason, duration = Infinity) => {
+      const now = typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : Date.now();
+      const until = duration === Infinity ? Infinity : now + Math.max(0, duration);
+      manualOverrideRef.current = {
+        until,
+        reason: reason || 'manual',
+      };
+      followBusIdRef.current = null;
+      lastFollowedRef.current = { id: null, lat: null, lng: null };
+    }, []);
 
     const mergeIncomingBuses = useCallback((list) => {
       if (!Array.isArray(list) || !list.length) return;
@@ -59,6 +74,33 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
       latestBusMapRef.current = nextMap;
       setData(Array.from(nextMap.values()));
     }, []);
+
+    useEffect(() => {
+      window.__notifyManualMapInteraction = (payload) => {
+        if (!payload || typeof payload !== 'object') {
+          registerManualOverride('external');
+          return;
+        }
+        const duration = Number.isFinite(payload.duration) ? payload.duration : undefined;
+        registerManualOverride(payload.reason, duration);
+      };
+
+      return () => {
+        if (window.__notifyManualMapInteraction) {
+          delete window.__notifyManualMapInteraction;
+        }
+      };
+    }, [registerManualOverride]);
+
+    useEffect(() => {
+      const orgChanged = prevOrgRef.current !== selectedOrg;
+      const busChanged = prevBusFilterRef.current !== selectedBusFilter;
+      if (orgChanged || busChanged) {
+        manualOverrideRef.current = { until: 0, reason: null };
+        prevOrgRef.current = selectedOrg;
+        prevBusFilterRef.current = selectedBusFilter;
+      }
+    }, [selectedOrg, selectedBusFilter]);
 
     useEffect(() => {
       const rawWsUrl = import.meta.env.VITE_WS_URL || '';
@@ -368,6 +410,13 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
       const lng = typeof position?.getLng === 'function' ? position.getLng() : item?.lng;
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
 
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const override = manualOverrideRef.current;
+      const manualActive = override.until === Infinity || override.until > now;
+      if (manualActive) {
+        return;
+      }
+
       const prev = lastFollowedRef.current;
       const hasPrev = prev?.id === id && Number.isFinite(prev.lat) && Number.isFinite(prev.lng);
       const diffLat = hasPrev ? Math.abs(lat - prev.lat) : Infinity;
@@ -378,13 +427,13 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
       const kakaoPos = position ?? (window.kakao?.maps ? new window.kakao.maps.LatLng(lat, lng) : null);
       if (!kakaoPos) return;
 
-      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const stepNow = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
       try {
         if (!hasPrev) {
           map.current.setCenter(kakaoPos);
         } else {
-          const elapsed = now - (lastPanAtRef.current || 0);
+          const elapsed = stepNow - (lastPanAtRef.current || 0);
           if (elapsed < MAP_PAN_INTERVAL) return;
           if (typeof map.current.panTo === 'function') {
             map.current.panTo(kakaoPos);
@@ -393,7 +442,7 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
           }
         }
         lastFollowedRef.current = { id, lat, lng };
-        lastPanAtRef.current = now;
+        lastPanAtRef.current = stepNow;
       } catch (error) {
         console.warn('지도 중심 이동 실패', error);
       }
@@ -420,6 +469,7 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
       const meta = busMetaRef.current;
       if (!meta.size) {
         followBusIdRef.current = null;
+        prevBusFilterRef.current = selectedBusFilter;
         return;
       }
 
@@ -427,6 +477,31 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
         ? selectedBusFilter
         : null;
       const selectedOrgKey = orgKeyFromSelection(selectedOrg);
+      const now = typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : Date.now();
+      const manualActive = manualOverrideRef.current.until > now || manualOverrideRef.current.until === Infinity;
+      const orgChanged = selectedOrg !== prevOrgRef.current;
+      const busChanged = selectedBusFilter !== prevBusFilterRef.current;
+      if (manualActive) {
+        if (operatorFilter !== null || selectedOrgKey) {
+          const triggeredByUserSelection = orgChanged || busChanged;
+          if (triggeredByUserSelection) {
+            manualOverrideRef.current = { until: 0, reason: null };
+          } else {
+            prevBusFilterRef.current = selectedBusFilter;
+            prevOrgRef.current = selectedOrg;
+            return;
+          }
+        } else {
+          prevBusFilterRef.current = selectedBusFilter;
+          prevOrgRef.current = selectedOrg;
+          return;
+        }
+      }
+      if ((operatorFilter !== null || selectedOrgKey) && manualOverrideRef.current.until) {
+        manualOverrideRef.current = { until: 0, reason: null };
+      }
 
       if (operatorFilter === null) {
         followBusIdRef.current = null;
@@ -477,6 +552,9 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
             console.warn('전체보기 중심 이동 실패', error);
           }
         }
+        prevBusFilterRef.current = selectedBusFilter;
+        prevBusFilterRef.current = selectedBusFilter;
+        prevOrgRef.current = selectedOrg;
         return;
       }
 
@@ -493,10 +571,16 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
       }
       if (!target) {
         followBusIdRef.current = null;
+        prevBusFilterRef.current = selectedBusFilter;
+        prevBusFilterRef.current = selectedBusFilter;
+        prevOrgRef.current = selectedOrg;
         return;
       }
 
-      if (followBusIdRef.current === target.id) return;
+      if (followBusIdRef.current === target.id) {
+        prevBusFilterRef.current = selectedBusFilter;
+        return;
+      }
 
       followBusIdRef.current = target.id;
       lastFollowedRef.current = { id: null, lat: null, lng: null };
@@ -517,6 +601,8 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
       } catch (error) {
         console.warn('지도 중심 이동 실패', error);
       }
+      prevBusFilterRef.current = selectedBusFilter;
+      prevOrgRef.current = selectedOrg;
     }, [selectedOrg, selectedBusFilter, data, mapReady]);
 
     useEffect(() => () => {
@@ -527,6 +613,7 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
       lastFollowedRef.current = { id: null, lat: null, lng: null };
       followBusIdRef.current = null;
       lastPanAtRef.current = 0;
+      manualOverrideRef.current = { until: 0, reason: null };
       stopAllAnimations();
     }, []);
 

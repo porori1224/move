@@ -67,6 +67,12 @@ const SearchBox = ({ size = 'md' }) => {
         map.setCenter(pos);
         if (typeof map.setLevel === 'function') map.setLevel(3);
 
+        try {
+          window.__notifyManualMapInteraction?.({ reason: 'search', duration: Infinity });
+        } catch (error) {
+          console.warn('Manual map interaction notify failed', error);
+        }
+
         // // 지도 위 카드형 오버레이(간단 목업) 생성
         // try {
         //   if (window.__searchOverlay) window.__searchOverlay.setMap(null);

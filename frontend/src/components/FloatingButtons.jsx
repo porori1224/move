@@ -41,6 +41,11 @@ const FloatingButtons = () => {
           if (window.__myLocationMarker && window.__kakaoMap) {
             const pos = window.__myLocationMarker.getPosition()
             window.__kakaoMap.setCenter(pos)
+            try {
+              window.__notifyManualMapInteraction?.({ reason: 'user-location', duration: Infinity })
+            } catch (error) {
+              console.warn('Manual map interaction notify failed', error)
+            }
           }
         }}
       />
