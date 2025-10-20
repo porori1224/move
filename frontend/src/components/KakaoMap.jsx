@@ -38,6 +38,7 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
     const map = useRef(null);
     const [data, setData] = useState([getDefaultBus()]);
     const [mapReady, setMapReady] = useState(false);
+    const [selectionTick, setSelectionTick] = useState(0);
     const busMarkersRef = useRef(new Map());
     const busMarkerImageRef = useRef(null);
     const busOverlaysRef = useRef(new Map());
@@ -49,6 +50,8 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
     const manualOverrideRef = useRef({ until: 0, reason: null });
     const prevBusFilterRef = useRef(selectedBusFilter);
     const prevOrgRef = useRef(selectedOrg);
+    const programmaticMoveRef = useRef(false);
+    const mapListenersRef = useRef([]);
     const registerManualOverride = useCallback((reason, duration = Infinity) => {
       const now = typeof performance !== 'undefined' && typeof performance.now === 'function'
         ? performance.now()
@@ -60,6 +63,20 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
       };
       followBusIdRef.current = null;
       lastFollowedRef.current = { id: null, lat: null, lng: null };
+    }, []);
+
+    const runWithProgrammatic = useCallback((action, settleDelay = 200) => {
+      if (typeof action !== 'function') return;
+      programmaticMoveRef.current = true;
+      try {
+        action();
+      } catch (error) {
+        console.warn('Programmatic map action failed', error);
+      } finally {
+        setTimeout(() => {
+          programmaticMoveRef.current = false;
+        }, settleDelay);
+      }
     }, []);
 
     const mergeIncomingBuses = useCallback((list) => {
@@ -77,6 +94,7 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
 
     useEffect(() => {
       window.__notifyManualMapInteraction = (payload) => {
+        if (!mapReady || !map.current) return;
         if (!payload || typeof payload !== 'object') {
           registerManualOverride('external');
           return;
@@ -85,12 +103,22 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
         registerManualOverride(payload.reason, duration);
       };
 
-      return () => {
-        if (window.__notifyManualMapInteraction) {
-          delete window.__notifyManualMapInteraction;
+      window.__resetMapToSelection = (payload) => {
+        if (!mapReady || !map.current) return;
+        manualOverrideRef.current = { until: 0, reason: payload?.reason || 'reset-selection' };
+        if (payload && typeof payload.level === 'number') {
+          runWithProgrammatic(() => {
+            map.current.setLevel(payload.level);
+          }, 400);
         }
+        setSelectionTick((prev) => prev + 1);
       };
-    }, [registerManualOverride]);
+
+      return () => {
+        if (window.__notifyManualMapInteraction) delete window.__notifyManualMapInteraction;
+        if (window.__resetMapToSelection) delete window.__resetMapToSelection;
+      };
+    }, [registerManualOverride, runWithProgrammatic, mapReady, setSelectionTick]);
 
     useEffect(() => {
       const orgChanged = prevOrgRef.current !== selectedOrg;
@@ -224,6 +252,35 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
           level: 3,
         };
         map.current = new window.kakao.maps.Map(container, options);
+        // 기존 리스너 정리 후 재등록
+        if (Array.isArray(mapListenersRef.current)) {
+          mapListenersRef.current.forEach((fn) => {
+            try { fn?.(); } catch (error) { console.warn('Map listener cleanup failed', error); }
+          });
+        }
+        mapListenersRef.current = [];
+
+        const addManualListener = (type, handler) => {
+          if (!window.kakao?.maps?.event || !map.current) return;
+          window.kakao.maps.event.addListener(map.current, type, handler);
+          mapListenersRef.current.push(() => {
+            try { window.kakao.maps.event.removeListener(map.current, type, handler); } catch (error) {
+              console.warn('Map listener removal failed', error);
+            }
+          });
+        };
+
+        const onManualDrag = () => {
+          if (programmaticMoveRef.current) return;
+          registerManualOverride('map-drag');
+        };
+        const onManualZoom = () => {
+          if (programmaticMoveRef.current) return;
+          registerManualOverride('map-zoom');
+        };
+
+        addManualListener('dragstart', onManualDrag);
+        addManualListener('zoom_changed', onManualZoom);
         setMapReady(true);
         // 전역으로 맵 인스턴스 노출 (간단한 컴포넌트 간 연동용)
         window.__kakaoMap = map.current;
@@ -318,8 +375,10 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
           const isFollowingBus = followBusIdRef.current !== null;
           if (!window.__myLocationInitialized) {
             if (!isFollowingBus) {
-              map.current.setCenter(myPos);
-              if (typeof map.current.setLevel === 'function') map.current.setLevel(3);
+              runWithProgrammatic(() => {
+                map.current.setCenter(myPos);
+                if (typeof map.current.setLevel === 'function') map.current.setLevel(3);
+              }, 220);
             }
             window.__myLocationInitialized = true;
           }
@@ -431,14 +490,20 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
 
       try {
         if (!hasPrev) {
-          map.current.setCenter(kakaoPos);
+          runWithProgrammatic(() => {
+            map.current.setCenter(kakaoPos);
+          }, 220);
         } else {
           const elapsed = stepNow - (lastPanAtRef.current || 0);
           if (elapsed < MAP_PAN_INTERVAL) return;
           if (typeof map.current.panTo === 'function') {
-            map.current.panTo(kakaoPos);
+            runWithProgrammatic(() => {
+              map.current.panTo(kakaoPos);
+            }, 480);
           } else {
-            map.current.setCenter(kakaoPos);
+            runWithProgrammatic(() => {
+              map.current.setCenter(kakaoPos);
+            }, 220);
           }
         }
         lastFollowedRef.current = { id, lat, lng };
@@ -446,7 +511,7 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
       } catch (error) {
         console.warn('지도 중심 이동 실패', error);
       }
-    }, [mapReady]);
+    }, [mapReady, runWithProgrammatic]);
 
     useEffect(() => {
       if (!mapReady || !map.current) return;
@@ -524,7 +589,9 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
 
           if (positions.length === 1) {
             try {
-              map.current.setCenter(positions[0]);
+              runWithProgrammatic(() => {
+                map.current.setCenter(positions[0]);
+              }, 220);
             } catch (error) {
               console.warn('기관 중심 이동 실패', error);
             }
@@ -535,7 +602,9 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
             try {
               const bounds = new window.kakao.maps.LatLngBounds();
               positions.forEach((pos) => bounds.extend(pos));
-              map.current.setBounds(bounds, 80, 80, 80, 80);
+              runWithProgrammatic(() => {
+                map.current.setBounds(bounds, 80, 80, 80, 80);
+              }, 500);
             } catch (error) {
               console.warn('기관 영역 맞추기 실패', error);
             }
@@ -547,7 +616,9 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
           ?? (window.kakao?.maps ? new window.kakao.maps.LatLng(INITIAL_POSITION.lat, INITIAL_POSITION.lng) : null);
         if (fallbackPos) {
           try {
-            map.current.setCenter(fallbackPos);
+            runWithProgrammatic(() => {
+              map.current.setCenter(fallbackPos);
+            }, 220);
           } catch (error) {
             console.warn('전체보기 중심 이동 실패', error);
           }
@@ -595,7 +666,9 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
       if (!centerPos) return;
 
       try {
-        map.current.setCenter(centerPos);
+        runWithProgrammatic(() => {
+          map.current.setCenter(centerPos);
+        }, 220);
         lastFollowedRef.current = { id: target.id, lat, lng };
         lastPanAtRef.current = typeof performance !== 'undefined' ? performance.now() : Date.now();
       } catch (error) {
@@ -603,7 +676,7 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
       }
       prevBusFilterRef.current = selectedBusFilter;
       prevOrgRef.current = selectedOrg;
-    }, [selectedOrg, selectedBusFilter, data, mapReady]);
+    }, [selectedOrg, selectedBusFilter, data, mapReady, selectionTick]);
 
     useEffect(() => () => {
       busMarkersRef.current.forEach((marker) => marker.setMap(null));
@@ -614,6 +687,12 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
       followBusIdRef.current = null;
       lastPanAtRef.current = 0;
       manualOverrideRef.current = { until: 0, reason: null };
+      if (Array.isArray(mapListenersRef.current)) {
+        mapListenersRef.current.forEach((fn) => {
+          try { fn?.(); } catch (error) { console.warn('Map listener cleanup failed', error); }
+        });
+      }
+      mapListenersRef.current = [];
       stopAllAnimations();
     }, []);
 

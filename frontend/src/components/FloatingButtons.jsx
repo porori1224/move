@@ -22,6 +22,18 @@ const FloatingButtons = () => {
   return (
     <div className={styles.container}>
       <CircleBtn
+        label="↺"
+        iconSrc="/mapsize/line-rounded-reset.svg"
+        iconAlt="기본 크기"
+        onClick={() => {
+          try {
+            window.__resetMapToSelection?.({ reason: 'reset-zoom', level: 3 })
+          } catch (error) {
+            console.warn('기본 크기 복원 실패', error)
+          }
+        }}
+      />
+      <CircleBtn
         label="+"
         iconSrc="/mapsize/line-rounded-plus.svg"
         iconAlt="확대"
