@@ -13,11 +13,12 @@ import OrgSelectButton from './components/OrgSelectButton'
 
 const ORG_BUSES = {
   '조선대학교': [
-    { id: 'chosun-1', name: '1호차' },
-    { id: 'chosun-2', name: '2호차' },
+    { id: 'chosun-1', name: '1호차', operatorId: 0 },
+    { id: 'chosun-2', name: '2호차', operatorId: 1 },
   ],
   '복지관': [
-    { id: 'welfare-1', name: '셔틀 A' },
+    { id: 'welfare-1', name: '1호차', operatorId: 0 },
+    { id: 'welfare-2', name: '2호차', operatorId: 1 },
   ],
 }
 
@@ -90,13 +91,20 @@ function App() {
 
   const busOptions = useMemo(() => ORG_BUSES[org] || [], [org])
 
+  const activeBusOption = useMemo(() => {
+    if (!org || !selectedBus || selectedBus === 'all') return null
+    return busOptions.find((bus) => bus.id === selectedBus) || null
+  }, [org, selectedBus, busOptions])
+
+  const selectedBusFilter = activeBusOption?.operatorId ?? null
+
   // 단순 배치만 담당하며, 로직은 각 컴포넌트 내부에 캡슐화되어 있습니다.
   return (
     <>
-      <KakaoMap />
+      <KakaoMap selectedOrg={org} selectedBusFilter={selectedBusFilter} />
       <SearchBox />
       <FloatingButtons />
-      <OrgSelectButton onToggle={() => setShowModal(v => !v)} />
+      <OrgSelectButton currentOrg={org} onToggle={() => setShowModal(v => !v)} />
       <OrgSelectModal open={showModal} defaultOrg={org} onSelect={handleSelect} onClose={handleClose} />
       <BusSelectPopup orgName={org} buses={busOptions} selectedBusId={selectedBus} onSelectBus={handleBusSelect} />
     </>
