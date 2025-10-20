@@ -116,7 +116,7 @@ const startAnimationLoop = (map, overlaysRef) => {
 }
 
 const ORG_LABELS = {
-  welfare: '복지관',
+  jang: '복지관',
   chosun: '조선대학교',
 }
 
@@ -157,7 +157,7 @@ const resolveOrgMeta = (raw) => {
     const normalized = cleanOrgToken(fallbackLabel)
     return { label: fallbackLabel.trim(), key: normalized || 'unassigned' }
   }
-  return { label: FALLBACK_ORG, key: 'welfare' }
+  return { label: FALLBACK_ORG, key: 'jang' }
 }
 
 const cleanKeySegment = (value) => {
