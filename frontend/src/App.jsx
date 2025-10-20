@@ -17,8 +17,8 @@ const ORG_BUSES = {
     { id: 'chosun-2', name: '2호차', operatorId: 1 },
   ],
   '복지관': [
-    { id: 'welfare-1', name: '1호차', operatorId: 0 },
-    { id: 'welfare-2', name: '2호차', operatorId: 1 },
+    { id: 'jang-1', name: '1호차', operatorId: 0 },
+    { id: 'jang-2', name: '2호차', operatorId: 1 },
   ],
 }
 

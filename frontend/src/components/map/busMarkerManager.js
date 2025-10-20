@@ -123,7 +123,7 @@ const ORG_LABELS = {
 const detectOrgKey = (token) => {
   if (!token) return null
   if (token.includes('조선대학교') || token.includes('chosun')) return 'chosun'
-  if (token.includes('복지관') || token.includes('jangtest') || token.includes('jang') || token.includes('welfare')) return 'welfare'
+  if (token.includes('복지관') || token.includes('jangtest') || token.includes('jang')) return 'jang'
   return null
 }
 
