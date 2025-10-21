@@ -12,7 +12,8 @@ const BusSelectPopup = ({ orgName, buses = [], selectedBusId = DEFAULT_OPTION.id
 
   const options = useMemo(() => {
     if (!Array.isArray(buses)) return [DEFAULT_OPTION]
-    return [DEFAULT_OPTION, ...buses]
+    const hasAll = buses.some((opt) => opt?.id === DEFAULT_OPTION.id)
+    return hasAll ? buses : [DEFAULT_OPTION, ...buses]
   }, [buses])
 
   const activeOption = useMemo(() => {
@@ -30,9 +31,14 @@ const BusSelectPopup = ({ orgName, buses = [], selectedBusId = DEFAULT_OPTION.id
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [open])
 
+  const prevSelectedRef = useRef(selectedBusId)
+
   useEffect(() => {
-    setOpen(false)
-  }, [selectedBusId, buses])
+    if (prevSelectedRef.current !== selectedBusId) {
+      setOpen(false)
+      prevSelectedRef.current = selectedBusId
+    }
+  }, [selectedBusId])
 
   useEffect(() => {
     if (!collapsed) return

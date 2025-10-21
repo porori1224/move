@@ -33,7 +33,7 @@ const resolveBusKey = (item = {}) => {
   return finalId || `${orgToken}:no-id`
 }
 
-const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
+const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter, onBusMetaUpdate }) => {
     const mapContainer = useRef(null);
     const map = useRef(null);
     const [data, setData] = useState([getDefaultBus()]);
@@ -535,6 +535,7 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
       if (!meta.size) {
         followBusIdRef.current = null;
         prevBusFilterRef.current = selectedBusFilter;
+        prevOrgRef.current = selectedOrg;
         return;
       }
 
@@ -678,6 +679,13 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
       prevOrgRef.current = selectedOrg;
     }, [selectedOrg, selectedBusFilter, data, mapReady, selectionTick]);
 
+    useEffect(() => {
+      if (!mapReady) return;
+      if (typeof onBusMetaUpdate === 'function') {
+        onBusMetaUpdate(Array.from(busMetaRef.current.values()));
+      }
+    }, [data, mapReady, onBusMetaUpdate]);
+
     useEffect(() => () => {
       busMarkersRef.current.forEach((marker) => marker.setMap(null));
       busMarkersRef.current.clear();
@@ -693,6 +701,9 @@ const MapContainer = ({ busData, num, selectedOrg, selectedBusFilter }) => {
         });
       }
       mapListenersRef.current = [];
+      if (typeof onBusMetaUpdate === 'function') {
+        onBusMetaUpdate([]);
+      }
       stopAllAnimations();
     }, []);
 

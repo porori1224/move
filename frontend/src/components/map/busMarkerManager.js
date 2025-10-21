@@ -117,13 +117,17 @@ const startAnimationLoop = (map, overlaysRef) => {
 
 const ORG_LABELS = {
   jang: '복지관',
+  'jang-test': '복지관 테스트',
   chosun: '조선대학교',
+  'chosun-test': '조선대학교 테스트',
 }
 
 const detectOrgKey = (token) => {
   if (!token) return null
-  if (token.includes('조선대학교') || token.includes('chosun')) return 'chosun'
-  if (token.includes('복지관') || token.includes('jangtest') || token.includes('jang')) return 'jang'
+  if (token.includes('chosuntest') || token.includes('조선대학교테스트') || token.includes('조선테스트')) return 'chosun-test'
+  if (token.includes('jangtest') || token.includes('복지관테스트') || token.includes('복지테스트')) return 'jang-test'
+  if (token.includes('chosun') || token.includes('조선대학교') || token.includes('조선')) return 'chosun'
+  if (token.includes('jang') || token.includes('복지관') || token.includes('복지')) return 'jang'
   return null
 }
 
@@ -279,6 +283,7 @@ const normalizeBusItem = (raw) => {
     orgKey,
     operatorId,
     busKey,
+    operatorName: typeof raw?.operatorName === 'string' ? raw.operatorName.trim() : undefined,
   }
 }
 
