@@ -53,6 +53,7 @@
   font-size: clamp(1.25rem, 3.5vw, 1.875rem);
   line-height: clamp(3rem, 4.5vw, 2.25rem);
   font-weight: 800;
+  padding-left: 65px;
   /* semibold */
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
 }

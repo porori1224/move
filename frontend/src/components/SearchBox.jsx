@@ -172,7 +172,7 @@ const SearchBox = ({ size = 'md' }) => {
         {/* 바깥 라운드 컨테이너 */}
         <div
           className="w-90 h-16 left-0 top-0 absolute rounded-[30px]"
-          style={{ backgroundColor: COLOR_BG, boxShadow: '10px 10px 4px rgba(0,0,0,0.25)' }}
+          style={{ backgroundColor: COLOR_BG, boxShadow: '4px 4px 2px rgba(64, 45, 45, 0.25)' }}
         />
 
         {/* 내부 입력 박스 */}
